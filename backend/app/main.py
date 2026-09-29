@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     await seed_historical_data()
     from app.seed_funds import seed_funds
-    seed_funds()
+    await seed_funds()
     start_scheduler()
     yield
     stop_scheduler()

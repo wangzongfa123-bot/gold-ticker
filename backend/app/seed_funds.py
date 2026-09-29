@@ -54,50 +54,51 @@ async def discover_funds() -> list[dict]:
     return _categorize_and_select(popular, qdii)
 
 
-def seed_funds():
+async def seed_funds():
     """Auto-seed funds from eastmoney, pulling NAV for each."""
     from app.services.fund_nav import fetch_history_nav
 
-    async def _run():
-        discovered = await discover_funds()
+    discovered = await discover_funds()
 
-        db = SessionLocal()
-        try:
-            added = 0
-            for fund in discovered:
-                # Seed fund info
-                fund_entry = {
-                    "code": fund["code"],
-                    "name": fund["name"],
-                    "category": fund["category"],
-                }
-                crud.seed_fund_info(db, [fund_entry])
+    db = SessionLocal()
+    try:
+        added = 0
+        for fund in discovered:
+            # Seed fund info
+            fund_entry = {
+                "code": fund["code"],
+                "name": fund["name"],
+                "category": fund["category"],
+            }
+            crud.seed_fund_info(db, [fund_entry])
 
-                # Generate and store reason
-                reason = fund.get("reason", "")
-                if not reason:
-                    from app.services.fund_discovery import generate_reason
-                    reason = generate_reason(fund, fund["category"])
-                crud.update_fund_reason(db, fund["code"], reason)
+            # Generate and store reason
+            reason = fund.get("reason", "")
+            if not reason:
+                from app.services.fund_discovery import generate_reason
 
-                # Fetch NAV history
-                navs = await fetch_history_nav(fund["code"], page=1, page_size=30)
-                if navs:
-                    for n in navs:
-                        crud.upsert_nav(
-                            db, fund["code"], n["nav_date"],
-                            n["nav"], n.get("accumulated_nav"),
-                            n.get("daily_return"),
-                        )
-                added += 1
-                print(f"[Seed] Fund {fund['code']} {fund['name']} ({fund['category']})")
+                reason = generate_reason(fund, fund["category"])
+            crud.update_fund_reason(db, fund["code"], reason)
 
-            print(f"[Seed] Auto-discovered and seeded {added} funds")
-        finally:
-            db.close()
+            # Fetch NAV history
+            navs = await fetch_history_nav(fund["code"], page=1, page_size=30)
+            if navs:
+                for n in navs:
+                    crud.upsert_nav(
+                        db,
+                        fund["code"],
+                        n["nav_date"],
+                        n["nav"],
+                        n.get("accumulated_nav"),
+                        n.get("daily_return"),
+                    )
+            added += 1
+            print(f"[Seed] Fund {fund['code']} {fund['name']} ({fund['category']})")
 
-    asyncio.run(_run())
+        print(f"[Seed] Auto-discovered and seeded {added} funds")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    seed_funds()
+    asyncio.run(seed_funds())
